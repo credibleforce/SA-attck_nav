@@ -68,7 +68,7 @@
       <fieldForLabel>title</fieldForLabel>
       <fieldForValue>search</fieldForValue>
       <search>
-        <query>| rest /services/saved/searches | search title!=*ESCU* AND title!=*DMC* AND title!=*instrumentation* AND title!=*CIM* AND title!=*Errors*| dedup title search | table title, description, search</query>
+        <query>| rest /services/saved/searches | search title="[T*" | dedup title search | table title, description, search</query>
         <earliest>-24h@h</earliest>
         <latest>now</latest>
       </search>
@@ -100,7 +100,7 @@
 | eval playbook_name="$ansible_awx_template$"
 | eval ansible_server="$ansible_awx_url$"
 | eval awx_ansible_user="$ansible_awx_user$"
-| sendalert ansible_invoke param.request_id=request_payload param.technique_id="$test_id$" param.technique_test_numbers="$tech_test_nums$" param.ansible_awx_user="$ansible_awx_user$" param.ansible_awx_template="$ansible_awx_template$" param.ansible_awx_target="$ansible_awx_target$" param.ansible_awx_url="$ansible_awx_url$" param.splunk_hec_url="$splunk_hec_url$" param.splunk_hec_user="$splunk_hec_user$"</query>
+| sendalert ansible_invoke param.request_id=$request_payload$ param.technique_id="$test_id$" param.technique_test_numbers="$tech_test_nums$" param.ansible_awx_user="$ansible_awx_user$" param.ansible_awx_template="$ansible_awx_template$" param.ansible_awx_target="$ansible_awx_target$" param.ansible_awx_url="$ansible_awx_url$" param.splunk_hec_url="$splunk_hec_url$" param.splunk_hec_user="$splunk_hec_user$"</query>
           <earliest>-24h@h</earliest>
           <latest>now</latest>
         </search>
@@ -158,30 +158,6 @@
         </search>
         <option name="drilldown">none</option>
         <option name="refresh.display">progressbar</option>
-      </table>
-    </panel>
-  </row>
-  <row>
-    <panel depends="group_earliest">
-      <title>Olaf Rule Detect Events</title>
-      <table>
-        <search>
-          <query>index=windows host=$asset$ source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" RuleName=*$test_id$*
-| sort _time | table _time, EventCode, EventType, EventDescription, RuleName | $NOOP_1$</query>
-          <earliest>-30m@m</earliest>
-          <latest>now</latest>
-          <sampleRatio>1</sampleRatio>
-          <refresh>30s</refresh>
-          <refreshType>delay</refreshType>
-        </search>
-        <option name="count">20</option>
-        <option name="dataOverlayMode">none</option>
-        <option name="drilldown">none</option>
-        <option name="percentagesRow">false</option>
-        <option name="refresh.display">progressbar</option>
-        <option name="rowNumbers">false</option>
-        <option name="totalsRow">false</option>
-        <option name="wrap">true</option>
       </table>
     </panel>
   </row>

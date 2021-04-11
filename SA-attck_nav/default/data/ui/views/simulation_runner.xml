@@ -67,7 +67,7 @@
         <query>| rest /servicesNS/nobody/TA-ansible-invoke/TA_ansible_invoke_account | table title</query>
       </search>
     </input>
-    <input type="dropdown" token="detectionSearch" searchWhenChanged="true">
+    <input type="dropdown" token="detectionSearch" searchWhenChanged="false">
       <label>Saved Search for Detection</label>
       <fieldForLabel>title</fieldForLabel>
       <fieldForValue>search</fieldForValue>

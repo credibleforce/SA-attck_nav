@@ -15,7 +15,11 @@
     </input>
     <input type="dropdown" token="ansible_awx_url">
       <label>Ansible AWX Server</label>
-      <choice value="http://ansible-srv1.lab.lan">ansible-srv1.lab.lan</choice>
+      <fieldForLabel>server</fieldForLabel>
+      <fieldForValue>server_url</fieldForValue>
+      <search>
+        <query>|inputlookup ansible_servers</query>
+      </search>
     </input>
     <input type="dropdown" token="ansible_awx_template">
       <label>Ansible AWX Template</label>
@@ -76,6 +80,35 @@
   </fieldset>
   <row>
     <panel>
+      <title>Task Request ID</title>
+      <table>
+        <search>
+          <finalized>
+            <set token="search_id">$result.info_sid$</set>
+            <set token="request_payload">$result.request_payload$</set>
+          </finalized>
+          <progress>
+            <unset token="request_id"></unset>
+          </progress>
+          <done>
+            <set token="request_id">$result.request_id$</set>
+          </done>
+          <query>|  makeresults
+| eval request_id=tostring(random())
+| eval test_id="$test_id$", tech_test_nums="$tech_test_nums$",ansible_awx_user="$ansible_awx_user$",ansible_awx_template="$ansible_awx_template$",ansible_awx_target="$ansible_awx_target$",ansible_awx_url="$ansible_awx_url$", splunk_hec_url="$splunk_hec_url$", splunk_hec_user="$splunk_hec_user$"
+| fields request_id</query>
+          <earliest>-1m@m</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <fields>["request_id"]</fields>
+      </table>
+    </panel>
+  </row>
+  <row>
+    <panel>
       <title>Atomic Execution (Wait for completion)</title>
       <table>
         <search id="AdvSim_test_event">
@@ -96,11 +129,11 @@
 | eval technique_name="$tech_name$"
 | eval technique_id="$test_id$"
 | eval technique_test_nums="$tech_test_nums$"
-| eval request_id=tostring(random())
+| eval request_id="$request_id$"
 | eval playbook_name="$ansible_awx_template$"
 | eval ansible_server="$ansible_awx_url$"
 | eval awx_ansible_user="$ansible_awx_user$"
-| sendalert ansible_invoke param.request_id=$request_payload$ param.technique_id="$test_id$" param.technique_test_numbers="$tech_test_nums$" param.ansible_awx_user="$ansible_awx_user$" param.ansible_awx_template="$ansible_awx_template$" param.ansible_awx_target="$ansible_awx_target$" param.ansible_awx_url="$ansible_awx_url$" param.splunk_hec_url="$splunk_hec_url$" param.splunk_hec_user="$splunk_hec_user$"</query>
+| sendalert ansible_invoke param.request_id="$request_id$" param.technique_id="$test_id$" param.technique_test_numbers="$tech_test_nums$" param.ansible_awx_user="$ansible_awx_user$" param.ansible_awx_template="$ansible_awx_template$" param.ansible_awx_target="$ansible_awx_target$" param.ansible_awx_url="$ansible_awx_url$" param.splunk_hec_url="$splunk_hec_url$" param.splunk_hec_user="$splunk_hec_user$"</query>
           <earliest>-24h@h</earliest>
           <latest>now</latest>
         </search>
@@ -116,10 +149,7 @@
       <title>Atomic Result</title>
       <table>
         <search>
-          <query>index=windows "Installation of Invoke-AtomicRedTeam" "$test_id$" source="WinEventLog:Microsoft-Windows-PowerShell/Operational" 
-|  rex field=Message "value=\"(?&lt;result&gt;[^\n]+)"
-| table result, Message 
-|  head 1 | $NOOP_1$</query>
+          <query>index=main source="splunk:redteam" RequestID="$request_id$" | table "Execution*", "GUID", "Hostname", "RequestID", "Technique", "Test Name", "Test Number", "Username" | $NOOP_1$</query>
           <earliest>-10m</earliest>
           <latest>now</latest>
           <refresh>30s</refresh>
@@ -151,7 +181,7 @@
         <title>$detectionSearch$ | $NOOP_1$</title>
         <search>
           <query>$detectionSearch$ 
-|  $NOOP_1$</query>
+| fields * | $NOOP_1$</query>
           <earliest>-30m@m</earliest>
           <latest>now</latest>
           <sampleRatio>1</sampleRatio>
@@ -159,120 +189,6 @@
         <option name="drilldown">none</option>
         <option name="refresh.display">progressbar</option>
       </table>
-    </panel>
-  </row>
-  <row>
-    <panel depends="group_earliest">
-      <title>Sysmon Registry Events</title>
-      <table>
-        <search>
-          <query>index=windows host=$asset$ source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" (EventCode=12 OR EventCode=13)
-| sort _time
-| table _time, EventCode, EventType, Image, TargetObject | $NOOP_1$</query>
-          <earliest>-30m@m</earliest>
-          <latest>now</latest>
-          <sampleRatio>1</sampleRatio>
-          <refresh>30s</refresh>
-          <refreshType>delay</refreshType>
-        </search>
-        <option name="count">20</option>
-        <option name="dataOverlayMode">none</option>
-        <option name="drilldown">none</option>
-        <option name="percentagesRow">false</option>
-        <option name="refresh.display">progressbar</option>
-        <option name="rowNumbers">false</option>
-        <option name="totalsRow">false</option>
-        <option name="wrap">true</option>
-      </table>
-    </panel>
-  </row>
-  <row>
-    <panel depends="group_earliest">
-      <title>Decoded Powershell commands from events during test time</title>
-      <table>
-        <search>
-          <query>| search index=windows host=$asset$ source="WinEventLog:Microsoft-Windows-PowerShell/Operational" | rex field=_raw "HostApplication=(?&lt;host_application&gt;[^\n]+)" 
-| rex field=Message "(?&lt;base64_data&gt;.[a-zA-Z0-9]{25,1000}+={1})" 
-| eval base64_data=trim(base64_data)
-| fields _time, host, host_application, base64_data 
-| decrypt field="base64_data" b64 emit('result') 
-|  table _time, host, result | $NOOP_1$</query>
-          <earliest>-30m</earliest>
-          <latest>now</latest>
-          <refresh>30s</refresh>
-          <refreshType>delay</refreshType>
-        </search>
-        <option name="drilldown">none</option>
-        <option name="refresh.display">progressbar</option>
-      </table>
-    </panel>
-  </row>
-  <row>
-    <panel depends="group_earliest">
-      <title>Cmd.exe commands from events during test time</title>
-      <table>
-        <search>
-          <query>| search index=windows host=$asset$  process_parent_name=*cmd.exe* Process_Command_Line!=*-encoded*
-| sort _time
-| table _time, process_parent_name, Process_Command_Line | $NOOP_1$</query>
-          <earliest>-30m</earliest>
-          <latest>now</latest>
-          <refresh>30s</refresh>
-          <refreshType>delay</refreshType>
-        </search>
-        <option name="drilldown">none</option>
-        <option name="refresh.display">progressbar</option>
-      </table>
-    </panel>
-  </row>
-  <row>
-    <panel depends="group_earliest">
-      <title>Sysmon File Create Events</title>
-      <table>
-        <search>
-          <query>index=windows source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" host=$asset$ EventCode=11
-| sort _time
-| table _time, EventCode, RuleName, Image, TargetFilename, ProcessId | $NOOP_1$</query>
-          <earliest>-30m</earliest>
-          <latest>now</latest>
-          <sampleRatio>1</sampleRatio>
-          <refresh>30s</refresh>
-          <refreshType>delay</refreshType>
-        </search>
-        <option name="count">20</option>
-        <option name="dataOverlayMode">none</option>
-        <option name="drilldown">none</option>
-        <option name="percentagesRow">false</option>
-        <option name="refresh.display">progressbar</option>
-        <option name="rowNumbers">false</option>
-        <option name="totalsRow">false</option>
-        <option name="wrap">true</option>
-      </table>
-    </panel>
-  </row>
-  <row>
-    <panel depends="group_earliest">
-      <title>All Sysmon Events</title>
-      <event>
-        <search>
-          <query>index=windows source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational" host=$asset$ | fields + * | $NOOP_1$</query>
-          <earliest>-30m</earliest>
-          <latest>now</latest>
-          <refresh>30s</refresh>
-          <refreshType>delay</refreshType>
-        </search>
-        <option name="count">20</option>
-        <option name="list.drilldown">none</option>
-        <option name="list.wrap">1</option>
-        <option name="maxLines">5</option>
-        <option name="raw.drilldown">full</option>
-        <option name="refresh.display">progressbar</option>
-        <option name="rowNumbers">0</option>
-        <option name="table.drilldown">all</option>
-        <option name="table.sortDirection">desc</option>
-        <option name="table.wrap">1</option>
-        <option name="type">list</option>
-      </event>
     </panel>
   </row>
   <row>
